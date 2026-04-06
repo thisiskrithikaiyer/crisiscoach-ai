@@ -1,6 +1,8 @@
 # CrisisCoach AI
 
-A conversational AI career crisis support companion built with Next.js + FastAPI + Anthropic Claude — powered by a multi-agent system that guides users from panic to a personalized action plan.
+A conversational AI companion built for people navigating the stress and uncertainty of a job layoff. CrisisCoach helps you track your job applications, make sense of where you stand, and — when panic and anxiety hit — gives you a grounded, step-by-step plan for how to spend your day so you can keep moving forward.
+
+Built with Next.js + FastAPI + Anthropic Claude, powered by a multi-agent system that meets you where you are emotionally and turns overwhelm into action.
 
 ## Multi-Agent Architecture
 
