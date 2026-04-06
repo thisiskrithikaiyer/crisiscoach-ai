@@ -36,34 +36,34 @@ export default function ChatWindow() {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full overflow-hidden">
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto p-3 space-y-1">
         {messages.length === 0 && (
-          <p className="text-center text-gray-400 mt-16 text-sm">
-            Hi, I&apos;m CrisisCoach. How are you feeling today?
+          <p className="text-center text-violet-300 mt-10 text-xs leading-relaxed px-2">
+            Hi, I&apos;m CrisisCoach.<br />How are you feeling today?
           </p>
         )}
         {messages.map((m, i) => (
           <ChatBubble key={i} message={m} />
         ))}
         {loading && (
-          <div className="flex justify-start mb-3">
-            <div className="bg-gray-100 rounded-2xl rounded-bl-sm px-4 py-3 text-sm text-gray-400">
+          <div className="flex justify-start mb-1">
+            <div className="bg-violet-50 rounded-2xl rounded-bl-sm px-3 py-2 text-xs text-violet-400">
               Thinking…
             </div>
           </div>
         )}
         {error && (
-          <p className="text-center text-red-500 text-xs mt-2">{error}</p>
+          <p className="text-center text-rose-400 text-xs mt-2 px-2">{error}</p>
         )}
         <div ref={bottomRef} />
       </div>
 
       {/* Input */}
-      <div className="border-t p-4 flex gap-2">
+      <div className="border-t border-violet-100 p-3 flex gap-2 shrink-0">
         <textarea
-          className="flex-1 resize-none border rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="flex-1 resize-none border border-violet-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-violet-400 placeholder-violet-300 text-gray-700"
           rows={2}
           placeholder="Type a message…"
           value={input}
@@ -78,7 +78,7 @@ export default function ChatWindow() {
         <button
           onClick={handleSend}
           disabled={loading || !input.trim()}
-          className="bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white rounded-xl px-4 py-2 text-sm font-medium transition-colors"
+          className="bg-violet-600 hover:bg-violet-700 disabled:opacity-40 text-white rounded-xl px-3 py-2 text-xs font-medium transition-colors shrink-0"
         >
           Send
         </button>

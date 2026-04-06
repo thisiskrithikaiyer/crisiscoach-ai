@@ -1,6 +1,71 @@
 # CrisisCoach AI
 
-A conversational AI crisis support companion built with Next.js + FastAPI + Anthropic Claude.
+A conversational AI career crisis support companion built with Next.js + FastAPI + Anthropic Claude — powered by a multi-agent system that guides users from panic to a personalized action plan.
+
+## Multi-Agent Architecture
+
+![CrisisCoach.AI Multi-Agent System](docs/architecture.png)
+
+CrisisCoach.AI uses an **orchestrated multi-agent system** where each agent has a focused responsibility. Here's how a user's journey flows through the system:
+
+### Flow Overview
+
+```
+User Input
+    │
+    ▼
+CrisisCoach.AI  ──routes──►  Orchestrator Agent
+                                     │
+              ┌──────────────────────┼──────────────────────┐
+              │                      │                       │
+        new user?             returning user?          plan failing?
+              │                      │                       │
+              ▼                      ▼                       ▼
+        Intake Agent          Planner Agent           Accountability
+              │               (builds plan,            Agent (re-routes,
+        collects initial      dispatches tasks)         triggers replanning)
+        context                      │
+                        ┌────────────┼───────────────┐
+                        │            │               │
+                        ▼            ▼               ▼
+              Personality Agent  ProfileBuilder   DailyTracker
+              ┌────────────────┐  Agent          Agent
+              │TalentMapper    │  ┌────────────┐  (check-ins,
+              │Agent           │  │Resume      │   progress
+              │                │  │Helper      │   updates)
+              │DailyCheck      │  │            │
+              │Agent           │  │LinkedIn    │
+              └────────────────┘  │Enhancer    │
+                                  └────────────┘
+```
+
+### Agent Roles
+
+| Agent | Role |
+|-------|------|
+| **Orchestrator Agent** | Entry point — routes every user message to the right agent based on context (new user, check-in, plan failure, etc.) |
+| **Intake Agent** | Onboards new users — collects initial situation, emotional state, skills, and goals |
+| **Planner Agent** | Builds a structured action plan from user context; dispatches tasks to specialized agents |
+| **Personality Agent** | Houses the *TalentMapper Agent* (surfaces transferable skills) and *DailyCheck Agent* (monitors mood/energy daily) |
+| **ProfileBuilder Agent** | Houses the *Resume Helper Agent* and *LinkedIn Enhancer Agent* — enriches the user's professional profile |
+| **DailyTracker Agent** | Handles daily check-ins and sends progress updates back to the Accountability Agent |
+| **Accountability Agent** | Monitors plan health — if progress stalls or the plan is failing, it signals the Orchestrator to re-route and replan |
+
+### Shared Infrastructure
+
+All agents read and write to a shared layer:
+
+- **PostgreSQL** — persistent user profiles, plans, and history
+- **Redis** — short-term session state and task queues
+- **pgvector** — semantic memory for surfacing relevant past context
+- **CompanyDB + Networking** — external search for job opportunities and connections
+
+### Key Flow Paths
+
+1. **New User** → Orchestrator → Intake Agent → Planner Agent → dispatches to Personality + ProfileBuilder agents → `profile ready` signal returned
+2. **Returning User (check-in)** → Orchestrator → DailyTracker Agent → Accountability Agent → progress update
+3. **Plan Failing** → Accountability Agent → Orchestrator → Planner Agent (replanning loop)
+4. **Profile Enrichment** → Planner Agent → ProfileBuilder Agent (Resume Helper + LinkedIn Enhancer) → `user insight ready`
 
 ## Project Structure
 

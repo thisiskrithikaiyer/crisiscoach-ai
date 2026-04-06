@@ -1,5 +1,5 @@
 import os
-import anthropic
+from openai import OpenAI
 from app.models.chat import Message
 
 SYSTEM_PROMPT = """You are CrisisCoach AI, a compassionate and trained crisis support companion.
@@ -12,18 +12,23 @@ Your role is to:
 
 Speak calmly, warmly, and clearly. If someone is in crisis, acknowledge their feelings before offering guidance."""
 
-client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+client = OpenAI(
+    api_key=os.environ["GROK_API_KEY"],
+    base_url="https://api.groq.com/openai/v1",
+)
 
 
 def chat(messages: list[Message], max_tokens: int = 1024) -> dict:
-    response = client.messages.create(
-        model="claude-sonnet-4-6",
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
         max_tokens=max_tokens,
-        system=SYSTEM_PROMPT,
-        messages=[{"role": m.role, "content": m.content} for m in messages],
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            *[{"role": m.role, "content": m.content} for m in messages],
+        ],
     )
     return {
-        "reply": response.content[0].text,
-        "input_tokens": response.usage.input_tokens,
-        "output_tokens": response.usage.output_tokens,
+        "reply": response.choices[0].message.content,
+        "input_tokens": response.usage.prompt_tokens,
+        "output_tokens": response.usage.completion_tokens,
     }
