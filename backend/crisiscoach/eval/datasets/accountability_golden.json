@@ -1,0 +1,18 @@
+[
+  {
+    "id": "acct_001",
+    "input": "I applied to 2 jobs today and had a coffee chat with an old colleague.",
+    "expected_intent": "accountability",
+    "expected_tone": "encouraging_specific",
+    "must_contain_one_of": ["coffee chat", "colleague", "network"],
+    "must_not_contain": ["great job", "proud of you"]
+  },
+  {
+    "id": "acct_002",
+    "input": "I didn't do anything today. I just couldn't get started.",
+    "expected_intent": "accountability",
+    "expected_tone": "empathetic_direct",
+    "must_contain_one_of": ["one thing", "small step", "start"],
+    "must_not_contain": ["you should", "you need to", "you must"]
+  }
+]

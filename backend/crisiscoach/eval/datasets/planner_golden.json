@@ -1,0 +1,33 @@
+[
+  {
+    "id": "planner_001",
+    "input_profile": {
+      "days_since_layoff": 5,
+      "runway_weeks": 24,
+      "mood_score": 6,
+      "energy_score": 7,
+      "target_roles": ["Senior Software Engineer"],
+      "open_tasks": 0
+    },
+    "expected_task_count_min": 3,
+    "expected_task_count_max": 6,
+    "required_categories": ["job_search"],
+    "must_not_be_generic": true
+  },
+  {
+    "id": "planner_002",
+    "input_profile": {
+      "days_since_layoff": 30,
+      "runway_weeks": 8,
+      "mood_score": 4,
+      "energy_score": 3,
+      "target_roles": ["Product Manager"],
+      "open_tasks": 5
+    },
+    "expected_task_count_min": 2,
+    "expected_task_count_max": 4,
+    "required_categories": ["wellness", "job_search"],
+    "must_not_be_generic": true,
+    "note": "Low runway + burnout signals should reduce task load and include wellness"
+  }
+]
