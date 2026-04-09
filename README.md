@@ -1,6 +1,6 @@
 # CrisisCoach AI
 
-A conversational AI companion built for people navigating the stress and uncertainty of a job layoff. CrisisCoach helps you track your job applications, make sense of where you stand, and — when panic and anxiety hit — gives you a grounded, step-by-step plan for how to spend your day so you can keep moving forward.
+An AI trainer that helps you reach your absolute best when crisis hits and logic takes a backseat. Layoffs hit hard. It feels personal. The internet has all the advice you need but when crisis hits, you are not mentally in the state to find it, read it, or act on it. That preparation gap is what separates people who break through from people who stay stuck. Not effort. Not talent. Preparation. CrisisCoach is an AI coach that customizes your preparation backed by data and your own existing potential so when logic takes a backseat, you still move forward.
 
 Built with Next.js + FastAPI + Anthropic Claude, powered by a multi-agent system that meets you where you are emotionally and turns overwhelm into action.
 
