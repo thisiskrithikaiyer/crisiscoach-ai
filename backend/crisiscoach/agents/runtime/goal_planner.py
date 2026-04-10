@@ -5,6 +5,7 @@ from langchain_core.messages import HumanMessage
 from openai import OpenAI
 from crisiscoach.config import GROQ_API_KEY, GROQ_MODEL
 from crisiscoach.orchestrator.state import CrisisCoachState
+from crisiscoach.orchestrator.state_prompt import state_to_prompt
 from crisiscoach.prompts.loader import load_prompt
 
 _client = OpenAI(api_key=GROQ_API_KEY, base_url="https://api.groq.com/openai/v1")
@@ -44,19 +45,7 @@ Assistant message:
 
 def _build_system(state: CrisisCoachState) -> str:
     base = load_prompt("goal_planner.txt")
-    snippets = []
-    if state.get("days_since_layoff") is not None:
-        snippets.append(f"Days since layoff: {state['days_since_layoff']}")
-    if state.get("runway_weeks") is not None:
-        snippets.append(f"Financial runway: ~{state['runway_weeks']} weeks")
-    if state.get("visa_deadline_days") is not None:
-        snippets.append(f"Visa deadline: {state['visa_deadline_days']} days away")
-    if state.get("mood_score") is not None:
-        snippets.append(f"Last mood score: {state['mood_score']}/10")
-    if state.get("energy_score") is not None:
-        snippets.append(f"Last energy score: {state['energy_score']}/10")
-    if state.get("open_tasks") is not None:
-        snippets.append(f"Open tasks from plan: {state['open_tasks']}")
+    snippets = [state_to_prompt(state)]
     if state.get("resume_text"):
         snippets.append(f"\nRESUME TEXT:\n{state['resume_text']}")
     if state.get("linkedin_text"):
@@ -111,14 +100,11 @@ def _build_system(state: CrisisCoachState) -> str:
         if t.get("daily_log"):
             snippets.append("\nDaily activity log (oldest → newest):")
             for day in t["daily_log"]:
-                topics = ", ".join(day["topics"]) if day.get("topics") else "—"
                 snippets.append(
                     f"  {day['date']} | mood {day.get('mood','?')} energy {day.get('energy','?')} "
                     f"| apps {day.get('apps',0)} net {day.get('networking',0)} "
                     f"| lc {day.get('leetcode_done',0)} sd {day.get('system_design_done',0)} "
-                    f"| interviews {day.get('interviews_completed',0)} "
-                    f"(pass {day.get('interviews_passed',0)} fail {day.get('interviews_failed',0)}) "
-                    f"| topics: {topics}"
+                    f"| interviews attended {day.get('interviews_attended',0)}"
                 )
 
     return base + ("\n\nUser context:\n" + "\n".join(snippets) if snippets else "")
@@ -133,13 +119,8 @@ def _save_flags(state: CrisisCoachState) -> None:
     if not user_id:
         return
     updates = {}
-    if state.get("runway_weeks") is not None:
-        updates["runway_weeks"] = state["runway_weeks"]
-    if state.get("visa_deadline_days") is not None:
-        deadline = date.today() + timedelta(days=state["visa_deadline_days"])
-        updates["visa_deadline"] = deadline.isoformat()
-    if state.get("days_since_layoff") is not None:
-        layoff_date = date.today() - timedelta(days=state["days_since_layoff"])
+    if state.get("days_since") is not None:
+        layoff_date = date.today() - timedelta(days=state["days_since"])
         updates["layoff_date"] = layoff_date.isoformat()
     if not updates:
         return

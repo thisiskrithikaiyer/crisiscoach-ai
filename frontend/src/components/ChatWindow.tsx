@@ -9,25 +9,6 @@ function formatAgent(raw: string) {
   return raw.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function parseReply(raw: string): { text: string; chips: string[] } {
-  const chips: string[] = [];
-  const textLines: string[] = [];
-
-  for (const line of raw.split("\n")) {
-    const chipsMatch = line.trim().match(/^CHIPS:\s*(\[.*\])\s*$/);
-    if (chipsMatch) {
-      try {
-        const parsed = JSON.parse(chipsMatch[1]);
-        if (Array.isArray(parsed)) chips.push(...parsed);
-      } catch { /* ignore */ }
-    } else {
-      textLines.push(line);
-    }
-  }
-
-  return { text: textLines.join("\n").trim(), chips };
-}
-
 type ChatItem =
   | { kind: "message"; message: Message }
   | { kind: "handoff"; agent: string; id: string };
@@ -98,12 +79,11 @@ export default function ChatWindow({
 
     try {
       const res = await sendMessage(updatedMessages);
-      const { text: replyText, chips: parsed } = parseReply(res.reply);
       const agent = res.agent;
-      const assistantMsg: Message = { role: "assistant", content: replyText };
+      const assistantMsg: Message = { role: "assistant", content: res.reply };
 
       setMessages([...updatedMessages, assistantMsg]);
-      setChips(parsed);
+      setChips(res.chips ?? []);
 
       setItems((prev) => {
         const next: ChatItem[] = [...prev];

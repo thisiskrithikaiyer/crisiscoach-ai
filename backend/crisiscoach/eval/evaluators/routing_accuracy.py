@@ -16,8 +16,8 @@ def score_routing(test_cases: list[dict]) -> dict:
             "messages": [HumanMessage(content=case["input"])],
             "user_id": "eval",
             "intent": "", "agent": "",
-            "days_since_layoff": None, "visa_deadline_days": None,
-            "runway_weeks": None, "mood_score": None, "energy_score": None,
+            "days_since": None, "days_left": None,
+            "mood_score": None, "energy_score": None,
             "open_tasks": None, "response": "", "sources": [],
         }
         predicted = classify_intent(state)

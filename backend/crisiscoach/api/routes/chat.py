@@ -35,8 +35,28 @@ AGENT_DISPLAY_NAMES = {
 }
 
 
+def _extract_chips(raw: str) -> tuple[str, list[str]]:
+    """Split LLM output into display text and chip options."""
+    import json, re
+    chips: list[str] = []
+    text_lines: list[str] = []
+    for line in raw.split("\n"):
+        m = re.match(r"^CHIPS:\s*(\[.*\])\s*$", line.strip())
+        if m:
+            try:
+                parsed = json.loads(m.group(1))
+                if isinstance(parsed, list):
+                    chips.extend(str(c) for c in parsed)
+            except Exception:
+                pass
+        else:
+            text_lines.append(line)
+    return "\n".join(text_lines).strip(), chips
+
+
 class ChatResponse(BaseModel):
     reply: str
+    chips: list[str] = []
     intent: str
     agent: str        # friendly display name for the UI
     sources: list[str] = []
@@ -69,9 +89,8 @@ async def chat(request: ChatRequest, user: dict = Depends(get_current_user)):
         "user_id": user_id,
         "intent": "",
         "agent": "",
-        "days_since_layoff": None,
-        "visa_deadline_days": None,
-        "runway_weeks": None,
+        "days_since": None,
+        "days_left": None,
         "mood_score": None,
         "energy_score": None,
         "open_tasks": None,
@@ -85,18 +104,23 @@ async def chat(request: ChatRequest, user: dict = Depends(get_current_user)):
     }
     try:
         result = await graph.ainvoke(initial_state)
-        reply = result.get("response", "")
+        raw_reply = result.get("response", "")
+        reply, chips = _extract_chips(raw_reply)
         intent = result.get("intent", "chat")
 
-        # Persist the last user turn + reply
+        # Persist the last user turn + reply (clean text, no CHIPS lines)
         last_user_msg = next(
             (m.content for m in reversed(lc_messages) if isinstance(m, HumanMessage)), ""
         )
         if last_user_msg and reply:
             _persist_messages(user_id, last_user_msg, reply, intent)
+            # Embed user message into ChromaDB for skill signal scanning
+            import asyncio
+            from crisiscoach.db.message_store import store_message
+            asyncio.get_event_loop().create_task(store_message(user_id, last_user_msg, intent))
 
         agent_display = result.get("agent_display") or AGENT_DISPLAY_NAMES.get(result.get("agent", ""), "Coach")
-        return ChatResponse(reply=reply, intent=intent, agent=agent_display, sources=result.get("sources", []))
+        return ChatResponse(reply=reply, chips=chips, intent=intent, agent=agent_display, sources=result.get("sources", []))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

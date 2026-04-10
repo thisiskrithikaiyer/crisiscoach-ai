@@ -5,6 +5,7 @@ from datetime import date, timedelta
 from openai import OpenAI
 from crisiscoach.config import GROQ_API_KEY, GROQ_MODEL
 from crisiscoach.orchestrator.state import CrisisCoachState
+from crisiscoach.orchestrator.state_prompt import state_to_prompt
 from crisiscoach.prompts.loader import load_prompt
 
 _client = OpenAI(api_key=GROQ_API_KEY, base_url="https://api.groq.com/openai/v1")
@@ -60,6 +61,24 @@ def _extract_fields(history: list[dict]) -> dict:
         return {}
 
 
+def _derive_deadline_state(fields: dict, state: CrisisCoachState) -> dict:
+    days_since = TIMELINE_TO_DAYS.get(fields.get("timeline", ""), state.get("days_since"))
+
+    candidates = []
+    runway_weeks = RUNWAY_TO_WEEKS.get(fields.get("runway", ""))
+    if runway_weeks is not None:
+        candidates.append(runway_weeks * 7)
+    if fields.get("visa_pressure") and fields.get("visa_days"):
+        candidates.append(int(fields["visa_days"]))
+    days_left = min(candidates) if candidates else state.get("days_left")
+
+    existing_skills = state.get("tracking_skills") or {}
+    leetcode_level = fields.get("leetcode_level")
+    tracking_skills = {**existing_skills, "leetcode_level": leetcode_level} if leetcode_level else existing_skills or None
+
+    return {"days_since": days_since, "days_left": days_left, "tracking_skills": tracking_skills}
+
+
 def _all_fields_collected(fields: dict) -> bool:
     return all(fields.get(f) is not None for f in REQUIRED_FIELDS)
 
@@ -113,12 +132,7 @@ def _build_system(state: CrisisCoachState, fields: dict) -> str:
         snippets.append(f"Runway already confirmed: {fields['runway']}")
     if fields.get("leetcode_level"):
         snippets.append(f"Leetcode level already confirmed: {fields['leetcode_level']}")
-    if state.get("days_since_layoff") is not None:
-        snippets.append(f"Days since layoff: {state['days_since_layoff']}")
-    if state.get("runway_weeks") is not None:
-        snippets.append(f"Financial runway: ~{state['runway_weeks']} weeks")
-    if state.get("visa_deadline_days") is not None:
-        snippets.append(f"Visa deadline: {state['visa_deadline_days']} days away")
+    snippets.append(state_to_prompt(state))
 
     missing = [f for f in REQUIRED_FIELDS if not fields.get(f)]
     if missing:
@@ -155,7 +169,7 @@ async def run(state: CrisisCoachState) -> dict:
     response_text = resp.choices[0].message.content
 
     intake_done = all_done and goal_confirmed
-    new_phase = "goal_setup" if intake_done else "intake"
+    new_phase = "goal_planner" if intake_done else "intake"
 
     if intake_done and user_id:
         try:
@@ -172,7 +186,5 @@ async def run(state: CrisisCoachState) -> dict:
         "sources": [],
         "intake_complete": intake_done,
         "phase": new_phase,
-        # Also push extracted values into state so context_builder doesn't need another DB round-trip
-        "days_since_layoff": TIMELINE_TO_DAYS.get(fields.get("timeline", ""), state.get("days_since_layoff")),
-        "runway_weeks": RUNWAY_TO_WEEKS.get(fields.get("runway", ""), state.get("runway_weeks")),
+        **_derive_deadline_state(fields, state),
     }

@@ -50,4 +50,15 @@ async def run(state: CrisisCoachState) -> dict:
         max_tokens=512,
         messages=[{"role": "system", "content": system}, {"role": "user", "content": content}],
     )
+
+    # Re-score skills in background after check-in — new wins/interview topics may have been logged
+    user_id = state.get("user_id")
+    if user_id:
+        try:
+            import asyncio
+            from crisiscoach.agents.background.talent_mapper import map_talent
+            asyncio.get_event_loop().create_task(map_talent(user_id))
+        except Exception:
+            pass
+
     return {"response": resp.choices[0].message.content, "sources": []}

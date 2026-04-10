@@ -4,32 +4,46 @@ Reads phase, conversation history, and user context to decide which agent runs n
 Replaces the rule-based router with an LLM that reasons about handoffs.
 """
 import json
+from datetime import date
 from langchain_core.messages import HumanMessage
 from openai import OpenAI
 from crisiscoach.config import GROQ_API_KEY, GROQ_MODEL
 from crisiscoach.orchestrator.state import CrisisCoachState
+from crisiscoach.orchestrator.state_prompt import state_to_prompt
 
 _client = OpenAI(api_key=GROQ_API_KEY, base_url="https://api.groq.com/openai/v1")
 
 AGENTS = {
     "intake": (
         "Runs when phase is intake. Handles only new users. Collects all the information from the user, "
-        "Once all required information is registered change phase=goal_setup."
+        "Once all required information is registered change phase=goal_planner."
     ),
     "goal_planner": (
-        "Builds or revises the 60-day job search strategy. Runs when phase=goal_setup "
+        "Builds or revises the job search strategy for the deadline. Runs when phase=goal_planner "
         "or when user explicitly wants to revisit their plan."
     ),
     "checkin": (
-        "Daily mood/energy/wins/blockers check-in. User is logging how today went."
+        "User is logging how today went: mood, energy, wins, blockers, prep done, applications sent, interviews completed."
     ),
     "accountability": (
-        "User is reporting task progress, asking what they should do today, "
-        "or wants to be held accountable to their plan."
+        "User wants to review planned vs actual, be held to commitments, or is showing drift: "
+        "missed days, low motivation, spiraling, or wasting time."
     ),
     "mental_health": (
-        "User is expressing distress, burnout, anxiety, hopelessness, or crisis signals. "
+        "User is expressing extreme distress, burnout, hopelessness, or crisis signals like suicidal ideation or self-harm. "
         "ALWAYS takes priority — route here if ANY distress signal is present."
+    ),
+    "profile_builder": (
+        "User wants help improving their resume or LinkedIn profile: rewriting sections, fixing formatting, "
+        "strengthening bullet points, or tailoring it to a role."
+    ),
+    "technical_prep": (
+        "User wants to practice or get help with technical interview topics: DSA, system design, "
+        "coding problems, or concept explanations."
+    ),
+    "mock_prep": (
+        "User wants to do a mock interview: behavioral, technical, or role-specific simulation "
+        "where the coach acts as the interviewer."
     ),
     "chat": (
         "General questions or conversation that don't fit any other agent."
@@ -43,6 +57,8 @@ MENTAL_HEALTH_SIGNALS = {
 
 _SUPERVISOR_SYSTEM = """You are the supervisor of CrisisCoach AI — a job-loss coaching app.
 Your only job is to decide which specialist agent should handle the user's current message.
+
+Today's date: {today}
 
 Available agents:
 {agents}
@@ -62,17 +78,6 @@ Output a single JSON object. No explanation.
 """
 
 
-def _build_context_snippet(state: CrisisCoachState) -> str:
-    parts = [f"phase: {state.get('phase', 'intake')}"]
-    if state.get("days_since_layoff") is not None:
-        parts.append(f"days since layoff: {state['days_since_layoff']}")
-    if state.get("runway_weeks") is not None:
-        parts.append(f"runway: {state['runway_weeks']} weeks")
-    if state.get("mood_score") is not None:
-        parts.append(f"last mood: {state['mood_score']}/10")
-    if state.get("intake_complete"):
-        parts.append("intake: complete")
-    return " | ".join(parts)
 
 
 def _is_crisis(text: str) -> bool:
@@ -105,7 +110,7 @@ def decide(state: CrisisCoachState) -> str:
 
     # phase=active — ask the LLM supervisor
     agents_desc = "\n".join(f'- "{k}": {v}' for k, v in AGENTS.items())
-    context_snippet = _build_context_snippet(state)
+    context_snippet = state_to_prompt(state)
 
     # Last 4 messages for context
     recent = state["messages"][-4:]
@@ -123,6 +128,7 @@ def decide(state: CrisisCoachState) -> str:
                 {
                     "role": "system",
                     "content": _SUPERVISOR_SYSTEM.format(
+                        today=date.today().isoformat(),
                         agents=agents_desc,
                         context=context_snippet,
                     ),

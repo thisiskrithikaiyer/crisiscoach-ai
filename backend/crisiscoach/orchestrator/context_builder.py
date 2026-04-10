@@ -7,7 +7,7 @@ REVISION_MODE_MIN_DAYS = 10
 NO_INTERVIEW_RESCORE_DAYS = 14
 
 # Only these agents use resume/LinkedIn text and tracking data
-_PROFILE_AGENTS = {"goal_planner"}
+_PROFILE_AGENTS = {"goal_planner", "profile_builder"}
 
 
 def _compute_deviation(actual: int, target: int) -> dict:
@@ -69,12 +69,10 @@ async def _fetch_tracking_summary(sb, user_id: str, days_since_layoff: int | Non
                 for cat, v in by_cat.items()
             }
 
-        # Daily activity logs (apps, networking, interviews)
+        # Daily activity logs
         log_rows = (
             sb.table("daily_log")
-            .select("date, apps_done, networking_done, interviews_scheduled, "
-                    "interviews_completed, interviews_passed, interviews_failed, "
-                    "interview_topics, leetcode_done, system_design_done")
+            .select("date, apps_done, networking_done, interviews_attended, leetcode_done, system_design_done")
             .eq("user_id", user_id)
             .order("date", desc=True)
             .limit(14)
@@ -85,23 +83,31 @@ async def _fetch_tracking_summary(sb, user_id: str, days_since_layoff: int | Non
         # Aggregate activity totals
         total_apps = sum(r.get("apps_done", 0) for r in log_rows)
         total_networking = sum(r.get("networking_done", 0) for r in log_rows)
-        total_interviews_completed = sum(r.get("interviews_completed", 0) for r in log_rows)
-        total_interviews_passed = sum(r.get("interviews_passed", 0) for r in log_rows)
-        total_interviews_failed = sum(r.get("interviews_failed", 0) for r in log_rows)
+        total_interviews_attended = sum(r.get("interviews_attended", 0) for r in log_rows)
         total_leetcode = sum(r.get("leetcode_done", 0) for r in log_rows)
         total_system_design = sum(r.get("system_design_done", 0) for r in log_rows)
-        all_topics = [t for r in log_rows for t in (r.get("interview_topics") or [])]
-        topic_freq: dict[str, int] = {}
-        for t in all_topics:
-            topic_freq[t] = topic_freq.get(t, 0) + 1
-        top_topics = sorted(topic_freq, key=lambda k: -topic_freq[k])[:5]
 
-        # Days since last interview
+        # Interview details from interviews table (last 14 days window)
+        cutoff = (date.today() - timedelta(days=14)).isoformat()
+        interview_rows = (
+            sb.table("interviews")
+            .select("date, company, stage, topics, status")
+            .eq("user_id", user_id)
+            .gte("date", cutoff)
+            .order("date", desc=True)
+            .execute()
+        ).data or []
+        total_interviews_passed = sum(1 for r in interview_rows if r.get("status") == "pass")
+        total_interviews_failed = sum(1 for r in interview_rows if r.get("status") == "fail")
+        topics_passed = list({t for r in interview_rows if r.get("status") == "pass" for t in (r.get("topics") or [])})
+        topics_failed = list({t for r in interview_rows if r.get("status") == "fail" for t in (r.get("topics") or [])})
+        top_topics = (topics_passed + topics_failed)[:5]
+
+        # Days since last interview attended
         days_since_interview = None
-        for r in log_rows:  # already desc
-            if r.get("interviews_completed", 0) > 0:
-                last_interview_date = date.fromisoformat(r["date"])
-                days_since_interview = (date.today() - last_interview_date).days
+        for r in log_rows:
+            if r.get("interviews_attended", 0) > 0:
+                days_since_interview = (date.today() - date.fromisoformat(r["date"])).days
                 break
         no_interview_rescore = (
             days_since_interview is None or days_since_interview >= NO_INTERVIEW_RESCORE_DAYS
@@ -152,10 +158,7 @@ async def _fetch_tracking_summary(sb, user_id: str, days_since_layoff: int | Non
                 "energy": next((c["energy_score"] for c in checkin_rows if c["created_at"][:10] == r["date"]), None),
                 "apps": r.get("apps_done", 0),
                 "networking": r.get("networking_done", 0),
-                "interviews_completed": r.get("interviews_completed", 0),
-                "interviews_passed": r.get("interviews_passed", 0),
-                "interviews_failed": r.get("interviews_failed", 0),
-                "topics": r.get("interview_topics") or [],
+                "interviews_attended": r.get("interviews_attended", 0),
                 "leetcode_done": r.get("leetcode_done", 0),
                 "system_design_done": r.get("system_design_done", 0),
             }
@@ -173,11 +176,11 @@ async def _fetch_tracking_summary(sb, user_id: str, days_since_layoff: int | Non
             "activity": {
                 "total_apps": total_apps,
                 "total_networking": total_networking,
-                "total_interviews_completed": total_interviews_completed,
+                "total_interviews_attended": total_interviews_attended,
                 "total_interviews_passed": total_interviews_passed,
                 "total_interviews_failed": total_interviews_failed,
-                "pass_rate": round(total_interviews_passed / total_interviews_completed * 100)
-                             if total_interviews_completed > 0 else None,
+                "pass_rate": round(total_interviews_passed / (total_interviews_passed + total_interviews_failed) * 100)
+                             if (total_interviews_passed + total_interviews_failed) > 0 else None,
                 "top_interview_topics": top_topics,
                 "days_since_interview": days_since_interview,
                 "total_leetcode": total_leetcode,
@@ -231,24 +234,26 @@ async def build_context(state: CrisisCoachState, intent: str = "") -> dict:
         )
         profile = profile_row.data or {}
 
-        days_since_layoff = None
+        days_since = None
         if profile.get("layoff_date"):
             layoff = date.fromisoformat(profile["layoff_date"])
-            days_since_layoff = (date.today() - layoff).days
+            days_since = (date.today() - layoff).days
 
-        visa_deadline_days = None
+        # Effective deadline = tightest of visa deadline and financial runway
+        deadline_candidates = []
         if profile.get("visa_deadline"):
-            deadline = date.fromisoformat(profile["visa_deadline"])
-            visa_deadline_days = (deadline - date.today()).days
+            deadline_candidates.append((date.fromisoformat(profile["visa_deadline"]) - date.today()).days)
+        if profile.get("runway_weeks") is not None:
+            deadline_candidates.append(profile["runway_weeks"] * 7)
+        days_left = min(deadline_candidates) if deadline_candidates else None
 
         tracking_summary = None
         if needs_profile:
-            tracking_summary = await _fetch_tracking_summary(sb, user_id, days_since_layoff)
+            tracking_summary = await _fetch_tracking_summary(sb, user_id, days_since)
 
         return {
-            "days_since_layoff": days_since_layoff,
-            "visa_deadline_days": visa_deadline_days,
-            "runway_weeks": profile.get("runway_weeks"),
+            "days_since": days_since,
+            "days_left": days_left,
             "mood_score": checkin.get("mood_score"),
             "energy_score": checkin.get("energy_score"),
             "intake_complete": bool(profile.get("intake_complete", False)),

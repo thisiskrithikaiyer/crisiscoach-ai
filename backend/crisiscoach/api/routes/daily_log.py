@@ -8,14 +8,10 @@ router = APIRouter()
 
 
 class DailyLogRequest(BaseModel):
-    date: str | None = None          # ISO date, defaults to today
+    date: str | None = None
     apps_done: int = 0
     networking_done: int = 0
-    interviews_scheduled: int = 0
-    interviews_completed: int = 0
-    interviews_passed: int = 0
-    interviews_failed: int = 0
-    interview_topics: list[str] = []  # e.g. ["system design", "dynamic programming", "behavioral"]
+    interviews_attended: int = 0
     leetcode_done: int = 0
     system_design_done: int = 0
 
@@ -39,11 +35,7 @@ async def upsert_daily_log(body: DailyLogRequest, user: dict = Depends(get_curre
                 "date": log_date,
                 "apps_done": body.apps_done,
                 "networking_done": body.networking_done,
-                "interviews_scheduled": body.interviews_scheduled,
-                "interviews_completed": body.interviews_completed,
-                "interviews_passed": body.interviews_passed,
-                "interviews_failed": body.interviews_failed,
-                "interview_topics": body.interview_topics,
+                "interviews_attended": body.interviews_attended,
                 "leetcode_done": body.leetcode_done,
                 "system_design_done": body.system_design_done,
             },

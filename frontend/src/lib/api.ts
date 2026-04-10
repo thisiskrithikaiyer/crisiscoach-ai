@@ -5,6 +5,7 @@ export interface Message {
 
 export interface ChatResponse {
   reply: string;
+  chips: string[];
   intent: string;
   agent: string;
   sources?: string[];

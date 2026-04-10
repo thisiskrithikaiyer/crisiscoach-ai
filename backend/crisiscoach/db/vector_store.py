@@ -1,4 +1,4 @@
-"""ChromaDB-backed vector store with OpenAI-compatible embeddings via Groq."""
+"""ChromaDB-backed vector store using Groq's nomic-embed-text (free tier)."""
 from functools import lru_cache
 from typing import Any
 import chromadb
@@ -6,10 +6,7 @@ from chromadb.config import Settings
 from openai import AsyncOpenAI
 from crisiscoach.config import CHROMA_PERSIST_DIR, GROQ_API_KEY
 
-_async_client = AsyncOpenAI(
-    api_key=GROQ_API_KEY,
-    base_url="https://api.groq.com/openai/v1",
-)
+_embed_client = AsyncOpenAI(api_key=GROQ_API_KEY, base_url="https://api.groq.com/openai/v1")
 
 
 @lru_cache(maxsize=1)
@@ -25,8 +22,8 @@ def get_collection(name: str) -> chromadb.Collection:
 
 
 async def embed_texts(texts: list[str]) -> list[list[float]]:
-    resp = await _async_client.embeddings.create(
-        model="llama-3.3-70b-versatile",  # use available model; swap for a dedicated embed model
+    resp = await _embed_client.embeddings.create(
+        model="nomic-embed-text-v1_5",
         input=texts,
     )
     return [item.embedding for item in resp.data]
