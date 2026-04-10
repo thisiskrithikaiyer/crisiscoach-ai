@@ -1,22 +1,46 @@
-"""Orchestrator node — classifies intent, enriches context, delegates to agent."""
+"""Orchestrator node — loads context, runs supervisor, delegates to agent."""
 from crisiscoach.orchestrator.state import CrisisCoachState
-from crisiscoach.orchestrator.router import classify_intent
+from crisiscoach.orchestrator.supervisor import decide
 from crisiscoach.orchestrator.context_builder import build_context
 
 
 AGENT_MAP = {
     "intake":         "crisiscoach.agents.runtime.intake",
+    "goal_planner":   "crisiscoach.agents.runtime.goal_planner",
     "checkin":        "crisiscoach.agents.runtime.daily_tracker",
     "plan":           "crisiscoach.agents.runtime.accountability",
     "accountability": "crisiscoach.agents.runtime.accountability",
     "mental_health":  "crisiscoach.agents.runtime.mental_health_check",
-    "chat":           "crisiscoach.agents.runtime.intake",  # intake handles general chat too
+    "chat":           "crisiscoach.agents.runtime.mental_health_check",
+}
+
+AGENT_DISPLAY_NAMES = {
+    "intake":       "Intake Coach",
+    "goal_planner": "Goal Strategist",
+    "checkin":      "Daily Tracker",
+    "plan":         "Accountability Coach",
+    "accountability": "Accountability Coach",
+    "mental_health": "Wellness Coach",
+    "chat":         "Coach",
 }
 
 
 async def orchestrator_node(state: CrisisCoachState) -> dict:
-    """LangGraph node: route → enrich context → return updated state."""
-    intent = classify_intent(state)
+    # 1. Load DB context (phase, intake_complete, runway, etc.) BEFORE supervisor decides
     ctx = await build_context(state)
+    enriched = {**state, **ctx}
 
-    return {**ctx, "intent": intent, "agent": AGENT_MAP.get(intent, AGENT_MAP["chat"])}
+    # 2. Supervisor decides which agent runs
+    intent = decide(enriched)
+
+    # 3. Re-fetch with intent for agents that need heavy data (resume, tracking)
+    if intent == "goal_planner":
+        ctx = await build_context(state, intent=intent)
+
+    agent_module = AGENT_MAP.get(intent, AGENT_MAP["chat"])
+    return {
+        **ctx,
+        "intent": intent,
+        "agent": agent_module,
+        "agent_display": AGENT_DISPLAY_NAMES.get(intent, "Coach"),
+    }

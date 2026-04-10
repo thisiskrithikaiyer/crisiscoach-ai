@@ -1,3 +1,4 @@
+from langchain_core.messages import HumanMessage
 """Daily tracker agent — processes check-in messages and generates empathetic responses."""
 import os
 from openai import OpenAI
@@ -36,7 +37,7 @@ async def generate_checkin_response(
 
 async def run(state: CrisisCoachState) -> dict:
     last_msg = next(
-        (m for m in reversed(state["messages"]) if getattr(m, "type", "") == "human"), None
+        (m for m in reversed(state["messages"]) if isinstance(m, HumanMessage)), None
     )
     content = last_msg.content if last_msg else ""
     system = (

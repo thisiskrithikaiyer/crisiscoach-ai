@@ -10,6 +10,7 @@ GROQ_MODEL: str = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
 # Supabase
 SUPABASE_URL: str = os.environ.get("SUPABASE_URL", "")
 SUPABASE_SERVICE_KEY: str = os.environ.get("SUPABASE_SERVICE_KEY", "")
+SUPABASE_ANON_KEY: str = os.environ.get("SUPABASE_ANON_KEY", "")
 
 # Redis
 REDIS_URL: str = os.environ.get("REDIS_URL", "redis://localhost:6379")

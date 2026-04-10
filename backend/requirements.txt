@@ -11,6 +11,7 @@ langchain-core>=0.2.0
 
 # Auth
 PyJWT>=2.8.0
+cryptography>=42.0.0
 
 # Database
 supabase>=2.4.0

@@ -24,12 +24,8 @@ def build_graph() -> StateGraph:
 
     graph.add_node("orchestrator", orchestrator_node)
 
-    # Register one node per unique agent module
-    registered: set[str] = set()
     for intent, module_path in AGENT_MAP.items():
-        if module_path not in registered:
-            graph.add_node(intent, _make_agent_node(module_path))
-            registered.add(module_path)
+        graph.add_node(intent, _make_agent_node(module_path))
 
     graph.set_entry_point("orchestrator")
 

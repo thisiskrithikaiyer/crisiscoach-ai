@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, AIMessage
 
 from crisiscoach.orchestrator import build_graph
 from crisiscoach.api.routes.auth import get_current_user
@@ -26,23 +26,47 @@ class ChatRequest(BaseModel):
     user_id: str | None = None
 
 
+AGENT_DISPLAY_NAMES = {
+    "crisiscoach.agents.runtime.intake":            "Intake Coach",
+    "crisiscoach.agents.runtime.goal_planner":      "Goal Strategist",
+    "crisiscoach.agents.runtime.daily_tracker":     "Daily Tracker",
+    "crisiscoach.agents.runtime.accountability":    "Accountability Coach",
+    "crisiscoach.agents.runtime.mental_health_check": "Wellness Coach",
+}
+
+
 class ChatResponse(BaseModel):
     reply: str
     intent: str
+    agent: str        # friendly display name for the UI
     sources: list[str] = []
+
+
+def _persist_messages(user_id: str, user_content: str, assistant_content: str, intent: str) -> None:
+    """Encrypt and save the user message and assistant reply. Non-blocking."""
+    try:
+        from crisiscoach.db.supabase import get_client
+        from crisiscoach.db.encryption import encrypt
+        sb = get_client()
+        sb.table("messages").insert([
+            {"user_id": user_id, "role": "user", "content": encrypt(user_content), "intent": intent},
+            {"user_id": user_id, "role": "assistant", "content": encrypt(assistant_content), "intent": intent},
+        ]).execute()
+    except Exception:
+        pass
 
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest, user: dict = Depends(get_current_user)):
     graph = get_graph()
+    user_id = user.get("sub", request.user_id or "")
     lc_messages = [
-        HumanMessage(content=m.content) if m.role == "user" else
-        type("AIMessage", (), {"content": m.content, "type": "ai"})()
+        HumanMessage(content=m.content) if m.role == "user" else AIMessage(content=m.content)
         for m in request.messages
     ]
     initial_state = {
         "messages": lc_messages,
-        "user_id": user.get("sub", request.user_id or ""),
+        "user_id": user_id,
         "intent": "",
         "agent": "",
         "days_since_layoff": None,
@@ -51,15 +75,54 @@ async def chat(request: ChatRequest, user: dict = Depends(get_current_user)):
         "mood_score": None,
         "energy_score": None,
         "open_tasks": None,
+        "resume_text": None,
+        "linkedin_text": None,
+        "tracking_summary": None,
+        "intake_complete": False,
+        "phase": "intake",
         "response": "",
         "sources": [],
     }
     try:
         result = await graph.ainvoke(initial_state)
-        return ChatResponse(
-            reply=result.get("response", ""),
-            intent=result.get("intent", "chat"),
-            sources=result.get("sources", []),
+        reply = result.get("response", "")
+        intent = result.get("intent", "chat")
+
+        # Persist the last user turn + reply
+        last_user_msg = next(
+            (m.content for m in reversed(lc_messages) if isinstance(m, HumanMessage)), ""
         )
+        if last_user_msg and reply:
+            _persist_messages(user_id, last_user_msg, reply, intent)
+
+        agent_display = result.get("agent_display") or AGENT_DISPLAY_NAMES.get(result.get("agent", ""), "Coach")
+        return ChatResponse(reply=reply, intent=intent, agent=agent_display, sources=result.get("sources", []))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/chat/history")
+async def chat_history(
+    limit: int = Query(default=10, le=50),
+    user: dict = Depends(get_current_user),
+):
+    """Return the last N messages (pairs) for the authenticated user, oldest-first."""
+    user_id = user.get("sub", "")
+    try:
+        from crisiscoach.db.supabase import get_client
+        sb = get_client()
+        # Fetch limit*2 rows (each exchange = 2 rows), then reverse for chronological order
+        from crisiscoach.db.encryption import decrypt
+        rows = (
+            sb.table("messages")
+            .select("role, content, intent, created_at")
+            .eq("user_id", user_id)
+            .order("created_at", desc=True)
+            .limit(limit * 2)
+            .execute()
+        ).data or []
+        for row in rows:
+            row["content"] = decrypt(row["content"])
+        return list(reversed(rows))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

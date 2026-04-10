@@ -10,6 +10,8 @@ class CrisisCoachState(TypedDict):
     # Routing
     intent: str          # classified intent: chat | intake | checkin | plan | accountability
     agent: str           # which agent handled this turn
+    intake_complete: bool  # True once the user has confirmed their 60-day goal
+    phase: str           # intake | goal_setup | active — gates which agents can run
 
     # User snapshot (populated by context_builder)
     days_since_layoff: int | None
@@ -18,6 +20,9 @@ class CrisisCoachState(TypedDict):
     mood_score: int | None        # 1-10 from last check-in
     energy_score: int | None      # 1-10 from last check-in
     open_tasks: int | None        # uncompleted plan items
+    resume_text: str | None       # pasted resume from dashboard
+    linkedin_text: str | None     # pasted LinkedIn profile from dashboard
+    tracking_summary: dict | None # last 10 days of checkins + task completion (goal_planner only)
 
     # Response
     response: str

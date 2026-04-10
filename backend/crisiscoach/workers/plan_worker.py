@@ -12,9 +12,9 @@ async def process_job(job: dict) -> None:
         logger.warning("plan_worker: job missing user_id, skipping")
         return
     try:
-        from crisiscoach.agents.background.planner import generate_plan
-        result = await generate_plan(user_id)
-        logger.info(f"plan_worker: plan generated for {user_id} — {result}")
+        from crisiscoach.agents.background.daily_check import build_daily_plan
+        result = await build_daily_plan(user_id)
+        logger.info(f"plan_worker: plan generated for {user_id} — mode={result['plan'].get('priority_mode')}")
     except Exception as e:
         logger.error(f"plan_worker: failed for user {user_id}: {e}")
 
